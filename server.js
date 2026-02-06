@@ -2,10 +2,14 @@ const express = require('express');
 const cors = require('cors');
 const Database = require('better-sqlite3');
 const { nanoid } = require('nanoid');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
-const app = express();
+const JWT_SECRET = process.env.JWT_SECRET || 'linksqueezer-secret-change-in-prod';
 const PORT = process.env.PORT || 3000;
+
+const app = express();
 
 // Middleware
 app.use(cors());
@@ -49,10 +53,94 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_clicks_link_id ON clicks(link_id);
 `);
 
+// Auth Middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Invalid or expired token' });
+    }
+    req.user = user;
+    next();
+  });
+};
+
 // API Routes
 
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Auth: Register
+app.post('/api/auth/register', async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required' });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  }
+
+  try {
+    const id = nanoid(10);
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const stmt = db.prepare('INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)');
+    stmt.run(id, email, passwordHash);
+
+    const token = jwt.sign({ id, email }, JWT_SECRET, { expiresIn: '7d' });
+
+    res.json({
+      success: true,
+      data: { user: { id, email }, token }
+    });
+  } catch (err) {
+    if (err.message.includes('UNIQUE constraint failed')) {
+      return res.status(400).json({ error: 'Email already registered' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Auth: Login
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required' });
+  }
+
+  const stmt = db.prepare('SELECT * FROM users WHERE email = ?');
+  const user = stmt.get(email);
+
+  if (!user) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
+  const validPassword = await bcrypt.compare(password, user.password_hash);
+  if (!validPassword) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
+  const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+
+  res.json({
+    success: true,
+    data: { user: { id: user.id, email: user.email }, token }
+  });
+});
+
 // Create a new link
-app.post('/api/links', (req, res) => {
+app.post('/api/links', authenticateToken, (req, res) => {
   const { originalUrl, title, customCode } = req.body;
   
   if (!originalUrl) {
@@ -64,7 +152,7 @@ app.post('/api/links', (req, res) => {
 
   try {
     const stmt = db.prepare('INSERT INTO links (id, user_id, original_url, short_code, title) VALUES (?, ?, ?, ?, ?)');
-    stmt.run(id, 'demo-user', originalUrl, shortCode, title || null);
+    stmt.run(id, req.user.id, originalUrl, shortCode, title || null);
     
     res.json({
       success: true,
@@ -84,10 +172,10 @@ app.post('/api/links', (req, res) => {
   }
 });
 
-// Get all links
-app.get('/api/links', (req, res) => {
+// Get all links for authenticated user
+app.get('/api/links', authenticateToken, (req, res) => {
   const stmt = db.prepare('SELECT * FROM links WHERE user_id = ? ORDER BY created_at DESC');
-  const links = stmt.all('demo-user');
+  const links = stmt.all(req.user.id);
   res.json({ success: true, data: links });
 });
 
@@ -149,11 +237,6 @@ app.get('/api/links/:id/analytics', (req, res) => {
       daily
     }
   });
-});
-
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 app.listen(PORT, () => {
