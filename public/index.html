@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LinkSqueezer - Link Management</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+    .container { max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+    header { text-align: center; margin-bottom: 40px; }
+    h1 { font-size: 2.5rem; color: #1a1a1a; margin-bottom: 8px; }
+    .tagline { color: #666; font-size: 1.1rem; }
+    .card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 24px; }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; margin-bottom: 6px; font-weight: 500; color: #444; }
+    input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; }
+    input:focus { outline: none; border-color: #0070f3; }
+    button { background: #0070f3; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 1rem; cursor: pointer; width: 100%; font-weight: 500; }
+    button:hover { background: #0051a8; }
+    .links-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    h2 { font-size: 1.25rem; }
+    .link-item { display: flex; justify-content: space-between; align-items: center; padding: 16px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 8px; }
+    .link-info { flex: 1; }
+    .link-title { font-weight: 500; margin-bottom: 4px; }
+    .link-url { color: #666; font-size: 0.875rem; word-break: break-all; }
+    .link-stats { text-align: right; }
+    .short-url { color: #0070f3; font-weight: 500; }
+    .clicks { color: #666; font-size: 0.875rem; }
+    .empty-state { text-align: center; padding: 40px; color: #666; }
+    .success { background: #d4edda; color: #155724; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🔗 LinkSqueezer</h1>
+      <p class="tagline">Short links with superpowers</p>
+    </header>
+
+    <div class="card">
+      <h2 style="margin-bottom: 16px;">Create New Link</h2>
+      <div id="success-msg" class="success" style="display: none;"></div>
+      <form id="link-form">
+        <div class="form-group">
+          <label>Original URL</label>
+          <input type="url" id="originalUrl" placeholder="https://your-long-url.com..." required>
+        </div>
+        <div class="form-group">
+          <label>Custom Title (optional)</label>
+          <input type="text" id="title" placeholder="My Link">
+        </div>
+        <button type="submit">Create Link</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="links-header">
+        <h2>Your Links</h2>
+      </div>
+      <div id="links-list">
+        <div class="empty-state">No links yet. Create your first one above!</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = '';
+
+    async function fetchLinks() {
+      const res = await fetch(`${API_URL}/api/links`);
+      const { data: links } = await res.json();
+      renderLinks(links);
+    }
+
+    async function createLink(e) {
+      e.preventDefault();
+      const originalUrl = document.getElementById('originalUrl').value;
+      const title = document.getElementById('title').value;
+
+      const res = await fetch(`${API_URL}/api/links`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ originalUrl, title })
+      });
+
+      const result = await res.json();
+
+      if (result.success) {
+        document.getElementById('success-msg').textContent = `Link created! Short URL: ${result.data.shortUrl}`;
+        document.getElementById('success-msg').style.display = 'block';
+        document.getElementById('link-form').reset();
+        fetchLinks();
+      }
+    }
+
+    function renderLinks(links) {
+      const container = document.getElementById('links-list');
+      
+      if (links.length === 0) {
+        container.innerHTML = '<div class="empty-state">No links yet. Create your first one above!</div>';
+        return;
+      }
+
+      container.innerHTML = links.map(link => `
+        <div class="link-item">
+          <div class="link-info">
+            <div class="link-title">${link.title || 'Untitled'}</div>
+            <div class="link-url">${link.original_url}</div>
+          </div>
+          <div class="link-stats">
+            <div class="short-url">/${link.short_code}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    document.getElementById('link-form').addEventListener('submit', createLink);
+    fetchLinks();
+  </script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "name": "linksqueezer",
+  "version": "1.0.0",
+  "description": "Link-in-bio + URL shortener with analytics",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Catalyst-thegoat/LinkSqueezer.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Catalyst-thegoat/LinkSqueezer/issues"
+  },
+  "homepage": "https://github.com/Catalyst-thegoat/LinkSqueezer#readme",
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.4",
+    "express": "^5.2.1",
+    "nanoid": "^5.1.6",
+    "uuid": "^13.0.0"
+  }
+}
